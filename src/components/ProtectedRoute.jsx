@@ -6,6 +6,6 @@ export default function ProtectedRoute({ children }) {
   const location = useLocation();
 
   if (!authReady) return <main className="auth-loading" aria-live="polite">Checking administrator session…</main>;
-  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!user?.username) return <Navigate to="/login" replace state={{ from: location }} />;
   return children;
 }

@@ -112,12 +112,17 @@ function LogoutRedirect({ onLogout }) {
 }
 
 export default function App() {
-  const { user, authReady } = useAuth();
-  if (!authReady) return <main className="auth-loading" aria-live="polite">Checking administrator session…</main>;
+  const { authReady } = useAuth();
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/login" element={<LoginRoute authReady={authReady} />} />
       <Route path="/*" element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>} />
     </Routes>
   );
+}
+
+function LoginRoute({ authReady }) {
+  const { user } = useAuth();
+  if (!authReady) return <main className="auth-loading" aria-live="polite">Checking administrator session…</main>;
+  return user?.username ? <Navigate to="/" replace /> : <Login />;
 }
