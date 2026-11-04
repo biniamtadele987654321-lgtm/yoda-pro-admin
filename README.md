@@ -13,7 +13,7 @@ The demo data is stored in browser `localStorage` and does not synchronize with 
 
 ## Admin authentication
 
-Without `VITE_ADMIN_API_URL`, login uses demo credentials `admin` / `admin1234`. The password verifier is stored as a PBKDF2 hash and the demo session marker is in `localStorage`; both are client-controlled and are strictly for local demos. Do not deploy the demo authentication mode.
+Without `VITE_ADMIN_API_URL`, login uses demo credentials `admin` / `admin1234` only when no administrator credential document exists yet. The PBKDF2 password verifier and profile are stored in the Firestore document `settings/admin`; the demo session marker remains in `localStorage`. Existing local credential records are migrated to Firestore on first initialization. This client-side demo authentication is not a substitute for server-side authentication and must not be used in production.
 
 For production, configure `VITE_ADMIN_API_URL` to an authenticated backend implementing `POST /auth/login`, `GET /auth/session`, `POST /auth/logout`, and `PUT /auth/profile` (accepting profile fields and an optional new password). Use HTTPS, rate limiting, secure `HttpOnly`, `SameSite` session cookies, CSRF defenses, and server-side credential hashing. The browser does not persist bearer tokens in production mode. Rotate the default demo password before enabling any production authentication.
 
@@ -21,7 +21,7 @@ For production, configure `VITE_ADMIN_API_URL` to an authenticated backend imple
 
 Set `VITE_PUSH_DISPATCH_URL` to an authenticated backend endpoint that accepts `POST` JSON with `id`, `title`, `message`, `image`, and `link`. A successful 2xx response marks the notification as sent; a missing endpoint or failed response is shown in the notification history. Keep push-provider credentials on the server, never in Vite environment variables or browser code.
 
-Administrator profile records are demo metadata only. Passwords are validated in the form but are never stored in browser storage; account creation and password changes require a secure authentication API.
+Administrator profile records are stored in `settings/admin` in Firestore when using demo authentication. Passwords are hashed before they are stored there; account creation and password changes in production require a secure authentication API.
 
 ## Global settings and app management
 

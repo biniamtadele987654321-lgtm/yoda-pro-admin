@@ -1,8 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "../services/firebase";
 
 const AuthContext = createContext(null);
 const AUTH_SESSION_KEY = "yoda-admin-auth-session";
 const AUTH_CREDENTIALS_KEY = "yoda-admin-auth-credentials";
+const ADMIN_CREDENTIALS_REF = doc(db, "settings", "admin");
 const PBKDF2_ITERATIONS = 210000;
 const INACTIVITY_TIMEOUT = 10 * 60 * 1000;
 const authApiUrl = import.meta.env.VITE_ADMIN_API_URL?.replace(/\/$/, "");
@@ -36,6 +39,23 @@ async function createCredentialRecord(username, password) {
     passwordHash: await hashPassword(password, salt),
     iterations: PBKDF2_ITERATIONS,
   };
+}
+
+function isCredentialRecord(record) {
+  return typeof record?.username === "string"
+    && typeof record?.salt === "string"
+    && typeof record?.passwordHash === "string";
+}
+
+async function getAdminCredentials() {
+  const snapshot = await getDoc(ADMIN_CREDENTIALS_REF);
+  if (!snapshot.exists()) return null;
+
+  const credentials = snapshot.data();
+  if (!isCredentialRecord(credentials)) {
+    throw new Error("Stored administrator credentials are invalid.");
+  }
+  return credentials;
 }
 
 function matchesHash(left, right) {
@@ -77,11 +97,16 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (!localStorage.getItem(AUTH_CREDENTIALS_KEY)) {
-          const initialCredentials = await createCredentialRecord("admin", "admin1234");
-          initialCredentials.fullName = "Administrator";
-          initialCredentials.email = "admin@yodapro.com";
-          localStorage.setItem(AUTH_CREDENTIALS_KEY, JSON.stringify(initialCredentials));
+        let credentials = await getAdminCredentials();
+        if (!credentials) {
+          const cachedCredentials = JSON.parse(localStorage.getItem(AUTH_CREDENTIALS_KEY) || "null");
+          credentials = isCredentialRecord(cachedCredentials)
+            ? cachedCredentials
+            : await createCredentialRecord("admin", "admin1234");
+          credentials.fullName ||= "Administrator";
+          credentials.email ||= "admin@yodapro.com";
+          await setDoc(ADMIN_CREDENTIALS_REF, credentials);
+          localStorage.setItem(AUTH_CREDENTIALS_KEY, JSON.stringify(credentials));
         }
         if (active) setUser(readDemoSession());
       } catch (error) {
@@ -119,8 +144,8 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const credentials = JSON.parse(localStorage.getItem(AUTH_CREDENTIALS_KEY) || "null");
-    if (!credentials?.salt || !credentials?.passwordHash) throw new Error("Demo credentials are unavailable.");
+    const credentials = await getAdminCredentials();
+    if (!credentials) throw new Error("Demo credentials are unavailable.");
     const suppliedHash = await hashPassword(password, base64ToBytes(credentials.salt));
     if (normalizedUsername !== credentials.username || !matchesHash(suppliedHash, credentials.passwordHash)) {
       localStorage.removeItem(AUTH_SESSION_KEY);
@@ -155,13 +180,14 @@ export function AuthProvider({ children }) {
       setUser(result?.user || { ...user, username: normalizedUsername, fullName: fullName.trim(), email: email.trim() });
       return;
     }
-    const stored = JSON.parse(localStorage.getItem(AUTH_CREDENTIALS_KEY) || "null");
-    if (!stored?.salt || !stored?.passwordHash) throw new Error("Demo credentials are unavailable.");
+    const stored = await getAdminCredentials();
+    if (!stored) throw new Error("Demo credentials are unavailable.");
     const record = password
       ? await createCredentialRecord(normalizedUsername, password)
       : { ...stored, username: normalizedUsername };
     record.fullName = fullName.trim();
     record.email = email.trim();
+    await setDoc(ADMIN_CREDENTIALS_REF, record);
     localStorage.setItem(AUTH_CREDENTIALS_KEY, JSON.stringify(record));
     const nextUser = { username: normalizedUsername, fullName: record.fullName, email: record.email };
     const session = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || "null");
