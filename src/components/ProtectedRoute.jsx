@@ -2,10 +2,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute({ children }) {
-  const { user, authReady } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
 
-  if (!authReady) return <main className="auth-loading" aria-live="polite">Checking administrator session…</main>;
   if (!user?.username) return <Navigate to="/login" replace state={{ from: location }} />;
   return children;
 }

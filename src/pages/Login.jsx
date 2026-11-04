@@ -8,7 +8,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const { login, authReady, authError } = useAuth();
+  const { login, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -30,8 +30,6 @@ export default function Login() {
       setSubmitting(false);
     }
   }
-
-  if (!authReady) return <main className="auth-loading" aria-live="polite">Checking administrator session…</main>;
 
   return (
     <main className="login-page">

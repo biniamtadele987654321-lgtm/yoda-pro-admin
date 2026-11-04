@@ -8,7 +8,6 @@ const AUTH_CREDENTIALS_KEY = "yoda-admin-auth-credentials";
 const ADMIN_CREDENTIALS_REF = doc(db, "settings", "admin");
 const PBKDF2_ITERATIONS = 210000;
 const INACTIVITY_TIMEOUT = 10 * 60 * 1000;
-const SESSION_CHECK_TIMEOUT = 5000;
 const authApiUrl = import.meta.env.VITE_ADMIN_API_URL?.replace(/\/$/, "");
 
 function bytesToBase64(bytes) {
@@ -81,24 +80,17 @@ function readDemoSession() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState(() => (authApiUrl ? null : readDemoSession()));
   const [authError, setAuthError] = useState("");
 
   useEffect(() => {
     let active = true;
-    let timedOut = false;
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-      setUser(null);
-      setAuthReady(true);
-    }, SESSION_CHECK_TIMEOUT);
 
     async function initialize() {
       try {
         if (authApiUrl) {
           const response = await fetch(`${authApiUrl}/auth/session`, { credentials: "include" });
-          if (!active || timedOut) return;
+          if (!active) return;
           if (response.status === 401) return;
           if (!response.ok) throw new Error(`Authentication service unavailable (HTTP ${response.status}).`);
           const result = await response.json();
@@ -107,7 +99,7 @@ export function AuthProvider({ children }) {
         }
 
         let credentials = await getAdminCredentials();
-        if (!active || timedOut) return;
+        if (!active) return;
         if (!credentials) {
           const cachedCredentials = JSON.parse(localStorage.getItem(AUTH_CREDENTIALS_KEY) || "null");
           credentials = isCredentialRecord(cachedCredentials)
@@ -118,19 +110,12 @@ export function AuthProvider({ children }) {
           await setDoc(ADMIN_CREDENTIALS_REF, credentials);
           localStorage.setItem(AUTH_CREDENTIALS_KEY, JSON.stringify(credentials));
         }
-        if (active && !timedOut) setUser(readDemoSession());
       } catch (error) {
-        if (active && !timedOut) setAuthError(error.message || "Authentication could not be initialized.");
-      } finally {
-        window.clearTimeout(timeoutId);
-        if (active && !timedOut) setAuthReady(true);
+        if (active) setAuthError(error.message || "Authentication could not be initialized.");
       }
     }
     initialize();
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutId);
-    };
+    return () => { active = false; };
   }, []);
 
   const login = useCallback(async (username, password) => {
@@ -324,13 +309,12 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     user,
-    authReady,
     authError,
     demoMode: !authApiUrl,
     login,
     logout,
     updateAdminProfile,
-  }), [user, authReady, authError, login, logout, updateAdminProfile]);
+  }), [user, authError, login, logout, updateAdminProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
